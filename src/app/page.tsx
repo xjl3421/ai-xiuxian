@@ -29,7 +29,10 @@ import {
   Gavel,
   ArrowRight,
   ChevronRight,
-  TrendingUp
+  TrendingUp,
+  Download,
+  Upload,
+  X
 } from 'lucide-react'
 
 // 游戏数据类型定义
@@ -118,6 +121,18 @@ interface Adventure {
   }>
 }
 
+interface Equipment {
+  name: string
+  quality: Quality
+  type: 'weapon' | 'armor' | 'accessory'
+  attributes: {
+    attack?: number
+    defense?: number
+    hp?: number
+    crit?: number
+  }
+}
+
 // 常量数据
 const PROFESSIONS = {
   sword: { name: '剑修', icon: Swords, desc: '擅长御剑飞行，攻击力高，速度快' },
@@ -135,6 +150,27 @@ const TALENTS = {
 }
 
 const REALMS = ['淬体', '炼气', '筑基', '金丹', '元婴', '化神', '大乘', '渡劫', '飞升']
+const MAJOR_REALMS = ['筑基', '金丹', '元婴', '化神', '大乘', '渡劫', '飞升'] // 大境界
+
+const SECTS = [
+  { name: '青云门', description: '正道第一大派，修炼剑道' },
+  { name: '天音寺', description: '佛门圣地，修炼佛法' },
+  { name: '鬼王宗', description: '魔道势力,修炼鬼道' },
+  { name: '合欢派', description: '魔道势力，双修之道' },
+  { name: '焚香谷', description: '正道门派，修炼火道' },
+  { name: '散修联盟', description: '散修聚集地，自由自在' }
+]
+
+// 境界对应的寿命增加
+const REALM_LIFESPAN_BONUS: Record<string, number> = {
+  '筑基': 100,
+  '金丹': 200,
+  '元婴': 300,
+  '化神': 500,
+  '大乘': 800,
+  '渡劫': 1000,
+  '飞升': 5000
+}
 
 const MONSTERS: Monster[] = [
   { id: 1, name: '山妖', level: 1, hp: 50, attack: 5, defense: 2, exp: 10, gold: 5, dropRate: { spiritStone: 0.2, pill: 0.1 } },
@@ -348,7 +384,11 @@ export default function XianXianGame() {
     pills: 5
   })
 
-  const [equipment, setEquipment] = useState({
+  const [equipment, setEquipment] = useState<{
+    weapon: Equipment | null
+    armor: Equipment | null
+    accessory: Equipment | null
+  }>({
     weapon: null,
     armor: null,
     accessory: null
@@ -368,6 +408,9 @@ export default function XianXianGame() {
   const [currentAdventure, setCurrentAdventure] = useState<Adventure | null>(null)
   const [notifications, setNotifications] = useState<Array<{ id: number; title: string; message: string }>>([])
   const [hasSavedGame, setHasSavedGame] = useState(false)
+  const [showSectDialog, setShowSectDialog] = useState(false)
+  const [showGameOverDialog, setShowGameOverDialog] = useState(false)
+  const [gameOverSummary, setGameOverSummary] = useState<string>('')
 
   // 检查是否有存档（只在客户端执行）
   useEffect(() => {
@@ -384,7 +427,11 @@ export default function XianXianGame() {
     setNotifications(prev => [...prev, { id, title, message }])
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== id))
-    }, 3000)
+    }, 5000)
+  }, [])
+
+  const removeNotification = useCallback((id: number) => {
+    setNotifications(prev => prev.filter(n => n.id !== id))
   }, [])
 
   const playerRef = useRef(player)
@@ -416,6 +463,61 @@ export default function XianXianGame() {
     localStorage.setItem('xianxian-save', JSON.stringify(gameData))
   }, [gameStarted, player, resources, equipment, inventory, quests, autoPlay])
 
+  const exportGame = useCallback(() => {
+    const gameData = {
+      player,
+      resources,
+      equipment,
+      inventory,
+      quests,
+      autoPlay,
+      exportDate: new Date().toISOString()
+    }
+    const dataStr = JSON.stringify(gameData, null, 2)
+    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `修仙经历_${player.name}_${player.realm}_Lv${player.level}_${new Date().toISOString().split('T')[0]}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    addNotification('导出成功', '修仙经历已导出为JSON文件')
+  }, [player, resources, equipment, inventory, quests, autoPlay, addNotification])
+
+  const importGame = useCallback(() => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = (e: Event) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        try {
+          const gameData = JSON.parse(event.target?.result as string)
+          setPlayer(gameData.player)
+          setResources(gameData.resources)
+          setEquipment(gameData.equipment)
+          setInventory(gameData.inventory)
+          setQuests(gameData.quests)
+          setAutoPlay(gameData.autoPlay || false)
+          setGameStarted(true)
+          addNotification('导入成功', '修仙经历已成功导入')
+        } catch (error) {
+          addNotification('导入失败', '文件格式不正确')
+          console.error('Import failed:', error)
+        }
+      }
+      reader.readAsText(file)
+    }
+    document.body.appendChild(input)
+    input.click()
+    document.body.removeChild(input)
+  }, [addNotification])
+
   const resetGame = () => {
     if (confirm('确定要重新开始吗？这将清除所有进度！')) {
       localStorage.removeItem('xianxian-save')
@@ -443,6 +545,43 @@ export default function XianXianGame() {
     }
     setShowProfession(true)
   }
+
+  const joinSect = useCallback((sectName: string) => {
+    setPlayer(prev => ({ ...prev, sect: sectName }))
+    setShowSectDialog(false)
+    addNotification('加入门派', `成功加入${sectName}！`)
+  }, [addNotification])
+
+  const checkGameOver = useCallback(() => {
+    if (player.age >= player.lifespan) {
+      const summary = `
+【修仙生涯总结】
+道号: ${player.name}
+门派: ${player.sect || '散修'}
+职业: ${PROFESSIONS[player.profession].name}
+体质: ${TALENTS[player.talent].name}
+最终境界: ${player.realm}
+最终等级: ${player.level}
+寿命: ${player.age}/${player.lifespan}岁
+最终攻击: ${player.attributes.attack}
+最终防御: ${player.attributes.defense}
+最终生命: ${player.attributes.maxHp}
+灵兽伙伴: ${player.pet || '无'}
+金币: ${resources.gold}
+灵石: ${resources.spiritStone}
+丹药: ${resources.pills}
+
+你在${player.realm}境界达到了寿命极限，未能突破更高境界。
+修仙路漫漫，愿来世再续仙缘！
+      `.trim()
+      
+      setGameOverSummary(summary)
+      setShowGameOverDialog(true)
+      setAutoPlay(false)
+      return true
+    }
+    return false
+  }, [player, resources, addNotification])
 
   const handleSelectProfession = (profession: Profession) => {
     const professionData = PROFESSIONS[profession]
@@ -530,9 +669,14 @@ export default function XianXianGame() {
       const realmIndex = REALMS.indexOf(currentPlayer.realm)
       const newRealmIndex = Math.min(realmIndex + Math.floor(currentPlayer.exp / 200), REALMS.length - 1)
       if (newRealmIndex > realmIndex) {
+        const newRealm = REALMS[newRealmIndex]
+        const isMajorRealm = MAJOR_REALMS.includes(newRealm)
+        const lifespanBonus = REALM_LIFESPAN_BONUS[newRealm] || 0
+        
         setPlayer(prev => ({
           ...prev,
-          realm: REALMS[newRealmIndex],
+          realm: newRealm,
+          lifespan: prev.lifespan + lifespanBonus,
           attributes: {
             ...prev.attributes,
             attack: prev.attributes.attack + 5,
@@ -541,8 +685,13 @@ export default function XianXianGame() {
             hp: prev.attributes.hp + 50
           }
         }))
-        updateQuestProgress('realm_reach', REALMS[newRealmIndex], 1)
-        addNotificationRef.current('境界突破', `恭喜！你突破到了${REALMS[newRealmIndex]}境！`)
+        updateQuestProgress('realm_reach', newRealm, 1)
+        addNotificationRef.current('境界突破', `恭喜！你突破到了${newRealm}境！${lifespanBonus > 0 ? `寿命增加${lifespanBonus}年！` : ''}`)
+        
+        // 大境界突破后，如果没有门派，显示门派选择
+        if (isMajorRealm && !currentPlayer.sect) {
+          setTimeout(() => setShowSectDialog(true), 1000)
+        }
       }
 
       if (Math.random() < currentEnemy.dropRate.spiritStone) {
@@ -558,6 +707,13 @@ export default function XianXianGame() {
       }
 
       addNotificationRef.current('战斗胜利', `击败${currentEnemy.name}！获得${expGained}经验，${goldGained}金币`)
+      
+      // 检查是否达到寿命极限
+      setTimeout(() => {
+        if (playerRef.current.age >= playerRef.current.lifespan) {
+          checkGameOver()
+        }
+      }, 1500)
     } else {
       setPlayer(prev => ({
         ...prev,
@@ -571,7 +727,7 @@ export default function XianXianGame() {
 
     setBattleInProgress(false)
     setCurrentEnemy(null)
-  }, [currentEnemy, updateQuestProgress])
+  }, [currentEnemy, updateQuestProgress, checkGameOver])
 
   const startBattle = useCallback(() => {
     if (battleInProgress) return
@@ -658,11 +814,11 @@ export default function XianXianGame() {
   }
 
   useEffect(() => {
-    if (autoPlay && !battleInProgress && gameStarted) {
+    if (autoPlay && !battleInProgress && gameStarted && !showGameOverDialog) {
       const timer = setTimeout(() => startBattle(), 1000)
       return () => clearTimeout(timer)
     }
-  }, [autoPlay, battleInProgress, startBattle, gameStarted])
+  }, [autoPlay, battleInProgress, startBattle, gameStarted, showGameOverDialog])
 
   const triggerAdventure = () => {
     const adventureIndex = Math.floor(Math.random() * ADVENTURES.length)
@@ -680,14 +836,14 @@ export default function XianXianGame() {
     if (result.rewards) {
       setResources(prev => ({
         ...prev,
-        gold: prev.gold + (result.rewards.gold || 0),
-        spiritStone: prev.spiritStone + (result.rewards.spiritStone || 0),
-        pills: prev.pills + (result.rewards.pills || 0)
+        gold: prev.gold + (result.rewards?.gold || 0),
+        spiritStone: prev.spiritStone + (result.rewards?.spiritStone || 0),
+        pills: prev.pills + (result.rewards?.pills || 0)
       }))
 
       setPlayer(prev => {
         const newAttributes = { ...prev.attributes }
-        if (result.rewards.attributes) {
+        if (result.rewards?.attributes) {
           if (result.rewards.attributes.attack) newAttributes.attack += result.rewards.attributes.attack
           if (result.rewards.attributes.defense) newAttributes.defense += result.rewards.attributes.defense
           if (result.rewards.attributes.hp) {
@@ -698,15 +854,15 @@ export default function XianXianGame() {
         }
         return {
           ...prev,
-          exp: prev.exp + (result.rewards.exp || 0),
-          sect: result.rewards.sect || prev.sect,
-          pet: result.rewards.pet || prev.pet,
+          exp: prev.exp + (result.rewards?.exp || 0),
+          sect: result.rewards?.sect || prev.sect,
+          pet: result.rewards?.pet || prev.pet,
           attributes: newAttributes
         }
       })
 
-      if (result.rewards.lifespan) {
-        setPlayer(prev => ({ ...prev, lifespan: prev.lifespan + result.rewards.lifespan! }))
+      if (result.rewards?.lifespan) {
+        setPlayer(prev => ({ ...prev, lifespan: prev.lifespan + (result.rewards?.lifespan || 0) }))
       }
     }
 
@@ -865,11 +1021,35 @@ export default function XianXianGame() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* 通知 */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
-        {notifications.map(notif => (
-          <Card key={notif.id} className="p-4 bg-card/95 backdrop-blur-sm border border-primary/30 shadow-lg animate-in slide-in-from-right">
-            <div className="font-display font-semibold text-primary mb-1">{notif.title}</div>
-            <div className="text-sm text-muted-foreground">{notif.message}</div>
+      <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
+        {notifications.map((notif, index) => (
+          <Card 
+            key={notif.id} 
+            className={`bg-card/95 backdrop-blur-sm border border-primary/30 shadow-lg animate-in slide-in-from-right transition-all ${
+              index === 0 ? 'p-4' : 'p-2 hover:p-4'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className={`flex-1 ${index === 0 ? '' : 'truncate'}`}>
+                <div className={`font-display font-semibold text-primary ${index === 0 ? 'mb-1' : ''}`}>
+                  {notif.title}
+                </div>
+                {index === 0 && (
+                  <div className="text-sm text-muted-foreground">{notif.message}</div>
+                )}
+              </div>
+              <button
+                onClick={() => removeNotification(notif.id)}
+                className="flex-shrink-0 w-5 h-5 rounded-full hover:bg-muted/50 flex items-center justify-center transition-colors"
+              >
+                <X className="w-3 h-3 text-muted-foreground" />
+              </button>
+            </div>
+            {index > 0 && (
+              <div className="text-xs text-muted-foreground/60 mt-1 truncate">
+                {notif.message}
+              </div>
+            )}
           </Card>
         ))}
       </div>
@@ -913,6 +1093,26 @@ export default function XianXianGame() {
             >
               {autoPlay ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
               {autoPlay ? '自动挂机中' : '自动挂机'}
+            </Button>
+
+            <Button
+              onClick={exportGame}
+              variant="outline"
+              size="sm"
+              className="h-10 border-2 border-input hover:border-primary/50"
+              title="导出修仙经历"
+            >
+              <Download className="w-4 h-4" />
+            </Button>
+
+            <Button
+              onClick={importGame}
+              variant="outline"
+              size="sm"
+              className="h-10 border-2 border-input hover:border-primary/50"
+              title="导入修仙经历"
+            >
+              <Upload className="w-4 h-4" />
             </Button>
 
             <Button
@@ -1305,6 +1505,93 @@ export default function XianXianGame() {
               >
                 离开
               </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* 门派选择弹窗 */}
+      {showSectDialog && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl bg-card border border-border/50 shadow-2xl">
+            <div className="p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="font-display text-2xl text-foreground">选择门派</h3>
+              </div>
+
+              <div className="inline-flex items-center gap-3 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 mb-6">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse-dot" />
+                <span className="font-mono-custom text-[11px] uppercase tracking-[0.15em] text-primary">
+                  突破大境界，各大门派纷纷抛来橄榄枝
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {SECTS.map(sect => (
+                  <Card
+                    key={sect.name}
+                    onClick={() => joinSect(sect.name)}
+                    className="p-5 border border-border/50 hover:border-primary/50 cursor-pointer transition-all hover:shadow-md hover:-translate-y-1 bg-muted/20"
+                  >
+                    <h4 className="font-display text-lg text-foreground mb-2">{sect.name}</h4>
+                    <p className="text-sm text-muted-foreground">{sect.description}</p>
+                  </Card>
+                ))}
+              </div>
+
+              <Button
+                onClick={() => setShowSectDialog(false)}
+                variant="outline"
+                className="w-full h-12 border-2 border-input hover:border-primary/50"
+              >
+                继续散修
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* 游戏结束弹窗 */}
+      {showGameOverDialog && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl bg-card border border-border/50 shadow-2xl">
+            <div className="p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500/20 to-orange-500/20 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-orange-500" />
+                </div>
+                <h3 className="font-display text-2xl text-foreground">修仙生涯结束</h3>
+              </div>
+
+              <Card className="p-6 bg-muted/30 border border-border/30 mb-6">
+                <pre className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap font-mono-custom">
+                  {gameOverSummary}
+                </pre>
+              </Card>
+
+              <div className="space-y-3">
+                <Button
+                  onClick={exportGame}
+                  className="w-full h-12 gradient-primary text-white shadow-sm hover:shadow-accent"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  导出修仙经历
+                </Button>
+
+                <Button
+                  onClick={() => {
+                    setShowGameOverDialog(false)
+                    resetGame()
+                  }}
+                  variant="outline"
+                  className="w-full h-12 border-2 border-input hover:border-primary/50"
+                >
+                  重新开始修仙
+                </Button>
+              </div>
             </div>
           </Card>
         </div>
