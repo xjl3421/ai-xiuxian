@@ -29,7 +29,12 @@ import {
   Gavel,
   ArrowRight,
   ChevronRight,
-  TrendingUp
+  TrendingUp,
+  ShoppingBag,
+  Package,
+  X,
+  Plus,
+  Coins
 } from 'lucide-react'
 
 // 游戏数据类型定义
@@ -37,6 +42,22 @@ type Profession = 'sword' | 'body' | 'fire' | 'ice' | 'thunder' | 'beast'
 type Talent = 'normal' | 'huanggu' | 'xianti'
 type Quality = 'white' | 'green' | 'blue' | 'purple' | 'orange' | 'red'
 type QuestStatus = 'in_progress' | 'completed' | 'claimed'
+type EquipmentType = 'weapon' | 'armor' | 'accessory'
+
+interface Equipment {
+  id: number
+  name: string
+  type: EquipmentType
+  level: number
+  quality: Quality
+  price: number
+  attributes: {
+    attack?: number
+    defense?: number
+    hp?: number
+    crit?: number
+  }
+}
 
 interface Player {
   name: string
@@ -70,6 +91,7 @@ interface Monster {
   dropRate: {
     spiritStone: number
     pill: number
+    equipment: number
   }
 }
 
@@ -107,6 +129,7 @@ interface Adventure {
         pet?: string
         sect?: string
         lifespan?: number
+        equipment?: Equipment
         attributes?: {
           attack?: number
           defense?: number
@@ -116,6 +139,26 @@ interface Adventure {
       }
     }
   }>
+}
+
+interface SectCultivation {
+  sect: string
+  name: string
+  description: string
+  cost: {
+    gold: number
+    spiritStone: number
+  }
+  rewards: {
+    exp: number
+    attributes?: {
+      attack?: number
+      defense?: number
+      hp?: number
+      crit?: number
+    }
+  }
+  cooldown: number
 }
 
 // 常量数据
@@ -136,17 +179,52 @@ const TALENTS = {
 
 const REALMS = ['淬体', '炼气', '筑基', '金丹', '元婴', '化神', '大乘', '渡劫', '飞升']
 
+const QUALITY_COLORS: Record<Quality, string> = {
+  white: 'text-gray-500',
+  green: 'text-green-500',
+  blue: 'text-blue-500',
+  purple: 'text-purple-500',
+  orange: 'text-orange-500',
+  red: 'text-red-500'
+}
+
+const EQUIPMENT_SHOP: Equipment[] = [
+  // 武器
+  { id: 1, name: '木剑', type: 'weapon', level: 1, quality: 'white', price: 50, attributes: { attack: 5 } },
+  { id: 2, name: '铁剑', type: 'weapon', level: 2, quality: 'green', price: 200, attributes: { attack: 12 } },
+  { id: 3, name: '精钢剑', type: 'weapon', level: 3, quality: 'blue', price: 500, attributes: { attack: 25, crit: 0.05 } },
+  { id: 4, name: '灵剑', type: 'weapon', level: 4, quality: 'purple', price: 1200, attributes: { attack: 45, crit: 0.08 } },
+  { id: 5, name: '法宝剑', type: 'weapon', level: 5, quality: 'orange', price: 3000, attributes: { attack: 80, crit: 0.12 } },
+  { id: 6, name: '仙品神剑', type: 'weapon', level: 6, quality: 'red', price: 8000, attributes: { attack: 150, crit: 0.18 } },
+  
+  // 防具
+  { id: 11, name: '布衣', type: 'armor', level: 1, quality: 'white', price: 50, attributes: { defense: 3, hp: 20 } },
+  { id: 12, name: '铁甲', type: 'armor', level: 2, quality: 'green', price: 200, attributes: { defense: 8, hp: 50 } },
+  { id: 13, name: '精钢甲', type: 'armor', level: 3, quality: 'blue', price: 500, attributes: { defense: 18, hp: 100 } },
+  { id: 14, name: '灵甲', type: 'armor', level: 4, quality: 'purple', price: 1200, attributes: { defense: 35, hp: 200 } },
+  { id: 15, name: '法宝甲', type: 'armor', level: 5, quality: 'orange', price: 3000, attributes: { defense: 65, hp: 400 } },
+  { id: 16, name: '仙品神甲', type: 'armor', level: 6, quality: 'red', price: 8000, attributes: { defense: 120, hp: 800 } },
+  
+  // 饰品
+  { id: 21, name: '玉佩', type: 'accessory', level: 1, quality: 'white', price: 50, attributes: { hp: 30 } },
+  { id: 22, name: '灵玉', type: 'accessory', level: 2, quality: 'green', price: 200, attributes: { hp: 80, crit: 0.03 } },
+  { id: 23, name: '宝玉', type: 'accessory', level: 3, quality: 'blue', price: 500, attributes: { hp: 150, crit: 0.05, attack: 5 } },
+  { id: 24, name: '灵宝', type: 'accessory', level: 4, quality: 'purple', price: 1200, attributes: { hp: 300, crit: 0.08, attack: 15 } },
+  { id: 25, name: '法宝', type: 'accessory', level: 5, quality: 'orange', price: 3000, attributes: { hp: 600, crit: 0.12, attack: 30 } },
+  { id: 26, name: '仙品宝物', type: 'accessory', level: 6, quality: 'red', price: 8000, attributes: { hp: 1200, crit: 0.18, attack: 60 } }
+]
+
 const MONSTERS: Monster[] = [
-  { id: 1, name: '山妖', level: 1, hp: 50, attack: 5, defense: 2, exp: 10, gold: 5, dropRate: { spiritStone: 0.2, pill: 0.1 } },
-  { id: 2, name: '野狼', level: 3, hp: 80, attack: 8, defense: 3, exp: 20, gold: 10, dropRate: { spiritStone: 0.25, pill: 0.15 } },
-  { id: 3, name: '狐妖', level: 5, hp: 120, attack: 12, defense: 5, exp: 35, gold: 18, dropRate: { spiritStone: 0.3, pill: 0.2 } },
-  { id: 4, name: '猛虎', level: 8, hp: 180, attack: 18, defense: 8, exp: 60, gold: 30, dropRate: { spiritStone: 0.35, pill: 0.25 } },
-  { id: 5, name: '妖狼王', level: 10, hp: 250, attack: 25, defense: 12, exp: 100, gold: 50, dropRate: { spiritStone: 0.4, pill: 0.3 } },
-  { id: 6, name: '蛇妖', level: 15, hp: 350, attack: 35, defense: 18, exp: 150, gold: 80, dropRate: { spiritStone: 0.45, pill: 0.35 } },
-  { id: 7, name: '赤炎兽', level: 20, hp: 500, attack: 50, defense: 25, exp: 250, gold: 120, dropRate: { spiritStone: 0.5, pill: 0.4 } },
-  { id: 8, name: '玄冰兽', level: 25, hp: 700, attack: 70, defense: 35, exp: 400, gold: 180, dropRate: { spiritStone: 0.55, pill: 0.45 } },
-  { id: 9, name: '雷兽', level: 30, hp: 1000, attack: 100, defense: 50, exp: 600, gold: 250, dropRate: { spiritStone: 0.6, pill: 0.5 } },
-  { id: 10, name: '魔王', level: 35, hp: 1500, attack: 150, defense: 75, exp: 1000, gold: 400, dropRate: { spiritStone: 0.7, pill: 0.6 } }
+  { id: 1, name: '山妖', level: 1, hp: 50, attack: 5, defense: 2, exp: 10, gold: 5, dropRate: { spiritStone: 0.2, pill: 0.1, equipment: 0.05 } },
+  { id: 2, name: '野狼', level: 3, hp: 80, attack: 8, defense: 3, exp: 20, gold: 10, dropRate: { spiritStone: 0.25, pill: 0.15, equipment: 0.06 } },
+  { id: 3, name: '狐妖', level: 5, hp: 120, attack: 12, defense: 5, exp: 35, gold: 18, dropRate: { spiritStone: 0.3, pill: 0.2, equipment: 0.07 } },
+  { id: 4, name: '猛虎', level: 8, hp: 180, attack: 18, defense: 8, exp: 60, gold: 30, dropRate: { spiritStone: 0.35, pill: 0.25, equipment: 0.08 } },
+  { id: 5, name: '妖狼王', level: 10, hp: 250, attack: 25, defense: 12, exp: 100, gold: 50, dropRate: { spiritStone: 0.4, pill: 0.3, equipment: 0.09 } },
+  { id: 6, name: '蛇妖', level: 15, hp: 350, attack: 35, defense: 18, exp: 150, gold: 80, dropRate: { spiritStone: 0.45, pill: 0.35, equipment: 0.1 } },
+  { id: 7, name: '赤炎兽', level: 20, hp: 500, attack: 50, defense: 25, exp: 250, gold: 120, dropRate: { spiritStone: 0.5, pill: 0.4, equipment: 0.11 } },
+  { id: 8, name: '玄冰兽', level: 25, hp: 700, attack: 70, defense: 35, exp: 400, gold: 180, dropRate: { spiritStone: 0.55, pill: 0.45, equipment: 0.12 } },
+  { id: 9, name: '雷兽', level: 30, hp: 1000, attack: 100, defense: 50, exp: 600, gold: 250, dropRate: { spiritStone: 0.6, pill: 0.5, equipment: 0.13 } },
+  { id: 10, name: '魔王', level: 35, hp: 1500, attack: 150, defense: 75, exp: 1000, gold: 400, dropRate: { spiritStone: 0.7, pill: 0.6, equipment: 0.15 } }
 ]
 
 const ADVENTURES: Adventure[] = [
@@ -275,6 +353,252 @@ const ADVENTURES: Adventure[] = [
         }
       }
     ]
+  },
+  {
+    id: 6,
+    title: '古墓探险',
+    description: '发现一座古老墓穴',
+    content: '墓穴前立着一块石碑，上书"生死有命，富贵在天"八个大字。墓穴深处似乎有宝光闪烁，但也可能隐藏着危险的机关和僵尸。',
+    options: [
+      {
+        id: 1,
+        text: '深入探索',
+        result: {
+          success: true,
+          message: '你成功避开了机关，在墓室中找到了一件法宝！',
+          rewards: { exp: 120, equipment: EQUIPMENT_SHOP[3], spiritStone: 8 }
+        }
+      },
+      {
+        id: 2,
+        text: '谨慎撤退',
+        result: {
+          success: false,
+          message: '你决定不冒险，安全地离开了墓穴。'
+        }
+      }
+    ]
+  },
+  {
+    id: 7,
+    title: '秘境开启',
+    description: '传说中的秘境开启了',
+    content: '一道灵光冲天而起，传说中的上古秘境突然开启。进入秘境可能获得珍贵宝物，但也充满凶险。',
+    options: [
+      {
+        id: 1,
+        text: '进入秘境',
+        result: {
+          success: true,
+          message: '你在秘境中历经艰险，最终获得了丰厚的回报！',
+          rewards: { exp: 300, gold: 500, pills: 8, spiritStone: 15 }
+        }
+      },
+      {
+        id: 2,
+        text: '观望等待',
+        result: {
+          success: false,
+          message: '你决定等待时机，秘境很快就关闭了。',
+          rewards: { exp: 30 }
+        }
+      }
+    ]
+  },
+  {
+    id: 8,
+    title: '炼器大师',
+    description: '遇到了一位炼器大师',
+    content: '一位白发苍苍的老者正在路边摆摊，摊位上摆满了各式法宝。他似乎很想找一个传人。',
+    options: [
+      {
+        id: 1,
+        text: '拜师学艺',
+        result: {
+          success: true,
+          message: '大师看你悟性不错，赠予你一件精品法器！',
+          rewards: { exp: 150, equipment: EQUIPMENT_SHOP[8] }
+        }
+      },
+      {
+        id: 2,
+        text: '购买法宝',
+        result: {
+          success: true,
+          message: '你花费了一些金币，购买了一件不错的武器。',
+          rewards: { equipment: EQUIPMENT_SHOP[2] }
+        }
+      }
+    ]
+  },
+  {
+    id: 9,
+    title: '魔修袭击',
+    description: '突然遭到魔修伏击',
+    content: '几个魔修突然从暗处跳出，企图抢夺你的资源。你必须做出选择！',
+    options: [
+      {
+        id: 1,
+        text: '奋力反击',
+        result: {
+          success: true,
+          message: '你击退了魔修，从他们身上搜刮到了一些财物！',
+          rewards: { exp: 100, gold: 300, equipment: EQUIPMENT_SHOP[11] }
+        }
+      },
+      {
+        id: 2,
+        text: '交出财物',
+        result: {
+          success: false,
+          message: '你交出了一些金币保命，魔修扬长而去。'
+        }
+      }
+    ]
+  },
+  {
+    id: 10,
+    title: '仙药出世',
+    description: '千年仙药即将成熟',
+    content: '山谷中一株千年仙药散发出诱人的香气，许多修士都在争夺。你也想分一杯羹。',
+    options: [
+      {
+        id: 1,
+        text: '参与争夺',
+        result: {
+          success: true,
+          message: '经过一番激战，你成功夺得仙药！实力大增！',
+          rewards: { exp: 250, pills: 15, attributes: { attack: 10, defense: 8, hp: 100 } }
+        }
+      },
+      {
+        id: 2,
+        text: '暗中观察',
+        result: {
+          success: true,
+          message: '你在混战中偷偷捡了一些掉落的药材。',
+          rewards: { pills: 5, spiritStone: 5 }
+        }
+      }
+    ]
+  },
+  {
+    id: 11,
+    title: '前辈传承',
+    description: '发现前辈遗留的传承',
+    content: '一道神识印记突然出现在你脑海中，这是某位前辈留下的传承。接受传承可能有风险，但收益巨大。',
+    options: [
+      {
+        id: 1,
+        text: '接受传承',
+        result: {
+          success: true,
+          message: '你成功接受了传承，修为突飞猛进，还获得了一件神器！',
+          rewards: { exp: 400, equipment: EQUIPMENT_SHOP[14], attributes: { attack: 15, defense: 12, crit: 0.05 } }
+        }
+      },
+      {
+        id: 2,
+        text: '拒绝传承',
+        result: {
+          success: false,
+          message: '你担心有诈，拒绝了这份传承。'
+        }
+      }
+    ]
+  },
+  {
+    id: 12,
+    title: '神秘商人',
+    description: '遇到了神秘的行商',
+    content: '一个蒙面商人向你兜售各种珍稀物品，价格不菲但确实罕见。',
+    options: [
+      {
+        id: 1,
+        text: '购买宝物',
+        result: {
+          success: true,
+          message: '你购买了商人的宝物，获得了一件稀有装备！',
+          rewards: { equipment: EQUIPMENT_SHOP[23] }
+        }
+      },
+      {
+        id: 2,
+        text: '讨价还价',
+        result: {
+          success: true,
+          message: '经过一番讨价还价，商人给你打了折扣！',
+          rewards: { gold: 100, spiritStone: 10 }
+        }
+      }
+    ]
+  }
+]
+
+const SECT_CULTIVATIONS: SectCultivation[] = [
+  {
+    sect: '青云门',
+    name: '青云剑诀',
+    description: '青云门秘传剑法，修炼可提升攻击力和暴击率',
+    cost: { gold: 100, spiritStone: 5 },
+    rewards: { exp: 80, attributes: { attack: 8, crit: 0.02 } },
+    cooldown: 3600
+  },
+  {
+    sect: '青云门',
+    name: '护体真气',
+    description: '青云门基础防御功法，修炼可提升防御力和生命值',
+    cost: { gold: 80, spiritStone: 4 },
+    rewards: { exp: 60, attributes: { defense: 6, hp: 80 } },
+    cooldown: 3600
+  },
+  {
+    sect: '天音寺',
+    name: '大悲咒',
+    description: '天音寺佛门心法，修炼可大幅提升生命值',
+    cost: { gold: 120, spiritStone: 6 },
+    rewards: { exp: 100, attributes: { hp: 150, defense: 10 } },
+    cooldown: 3600
+  },
+  {
+    sect: '天音寺',
+    name: '金刚不坏',
+    description: '天音寺至高防御神功',
+    cost: { gold: 150, spiritStone: 8 },
+    rewards: { exp: 120, attributes: { defense: 15, hp: 100 } },
+    cooldown: 3600
+  },
+  {
+    sect: '鬼王宗',
+    name: '血炼大法',
+    description: '鬼王宗邪道功法，可大幅提升攻击但略减生命',
+    cost: { gold: 150, spiritStone: 8 },
+    rewards: { exp: 150, attributes: { attack: 20, crit: 0.05 } },
+    cooldown: 3600
+  },
+  {
+    sect: '鬼王宗',
+    name: '魔功噬魂',
+    description: '鬼王宗禁术，修炼可获得强大暴击能力',
+    cost: { gold: 180, spiritStone: 10 },
+    rewards: { exp: 180, attributes: { attack: 15, crit: 0.08 } },
+    cooldown: 3600
+  },
+  {
+    sect: '烈火殿',
+    name: '烈焰心法',
+    description: '烈火殿核心功法，提升火属性攻击力',
+    cost: { gold: 130, spiritStone: 7 },
+    rewards: { exp: 110, attributes: { attack: 12, crit: 0.03 } },
+    cooldown: 3600
+  },
+  {
+    sect: '玄冰谷',
+    name: '寒冰真诀',
+    description: '玄冰谷秘传功法，提升冰属性防御',
+    cost: { gold: 130, spiritStone: 7 },
+    rewards: { exp: 110, attributes: { defense: 12, hp: 100 } },
+    cooldown: 3600
   }
 ]
 
@@ -348,13 +672,17 @@ export default function XianXianGame() {
     pills: 5
   })
 
-  const [equipment, setEquipment] = useState({
-    weapon: null,
+  const [equipment, setEquipment] = useState<{
+    weapon: Equipment | null
+    armor: Equipment | null
+    accessory: Equipment | null
+  }>({
+    weapon: EQUIPMENT_SHOP[0], // 初始给一级武器
     armor: null,
     accessory: null
   })
 
-  const [inventory, setInventory] = useState([])
+  const [inventory, setInventory] = useState<Equipment[]>([])
 
   const [quests, setQuests] = useState<Quest[]>(INITIAL_QUESTS)
 
@@ -368,6 +696,12 @@ export default function XianXianGame() {
   const [currentAdventure, setCurrentAdventure] = useState<Adventure | null>(null)
   const [notifications, setNotifications] = useState<Array<{ id: number; title: string; message: string }>>([])
   const [hasSavedGame, setHasSavedGame] = useState(false)
+  
+  // 新增状态：商城、背包、门派修炼
+  const [showShop, setShowShop] = useState(false)
+  const [showInventory, setShowInventory] = useState(false)
+  const [showCultivation, setShowCultivation] = useState(false)
+  const [cultivationCooldowns, setCultivationCooldowns] = useState<Record<string, number>>({})
 
   // 检查是否有存档（只在客户端执行）
   useEffect(() => {
@@ -556,6 +890,15 @@ export default function XianXianGame() {
         setResources(prev => ({ ...prev, pills: prev.pills + amount }))
         addNotificationRef.current('掉落', `获得${amount}颗丹药！`)
       }
+      
+      // 装备掉落
+      if (Math.random() < currentEnemy.dropRate.equipment) {
+        const droppedEquip = generateEquipmentDrop(currentEnemy.level)
+        if (droppedEquip) {
+          setInventory(prev => [...prev, droppedEquip])
+          addNotificationRef.current('装备掉落', `获得了${droppedEquip.name}！`)
+        }
+      }
 
       addNotificationRef.current('战斗胜利', `击败${currentEnemy.name}！获得${expGained}经验，${goldGained}金币`)
     } else {
@@ -708,10 +1051,158 @@ export default function XianXianGame() {
       if (result.rewards.lifespan) {
         setPlayer(prev => ({ ...prev, lifespan: prev.lifespan + result.rewards.lifespan! }))
       }
+      
+      // 处理装备掉落
+      if (result.rewards.equipment) {
+        addToInventory(result.rewards.equipment)
+      }
     }
 
     setShowAdventure(false)
     setCurrentAdventure(null)
+  }
+
+  // 计算总属性（基础 + 装备）
+  const getTotalAttributes = useCallback(() => {
+    const base = player.attributes
+    let total = { ...base }
+    
+    Object.values(equipment).forEach(item => {
+      if (item) {
+        if (item.attributes.attack) total.attack += item.attributes.attack
+        if (item.attributes.defense) total.defense += item.attributes.defense
+        if (item.attributes.hp) {
+          total.maxHp += item.attributes.hp
+          total.hp += item.attributes.hp
+        }
+        if (item.attributes.crit) total.crit += item.attributes.crit
+      }
+    })
+    
+    return total
+  }, [player.attributes, equipment])
+
+  // 装备物品
+  const equipItem = (item: Equipment) => {
+    const currentEquipped = equipment[item.type]
+    
+    // 卸下当前装备到背包
+    if (currentEquipped) {
+      setInventory(prev => [...prev, currentEquipped])
+    }
+    
+    // 装备新物品
+    setEquipment(prev => ({
+      ...prev,
+      [item.type]: item
+    }))
+    
+    // 从背包移除
+    setInventory(prev => prev.filter(i => i.id !== item.id))
+    
+    addNotification('装备', `已装备${item.name}`)
+  }
+
+  // 卸下装备
+  const unequipItem = (type: EquipmentType) => {
+    const item = equipment[type]
+    if (!item) return
+    
+    setInventory(prev => [...prev, item])
+    setEquipment(prev => ({
+      ...prev,
+      [type]: null
+    }))
+    
+    addNotification('卸下', `已卸下${item.name}`)
+  }
+
+  // 添加到背包
+  const addToInventory = (item: Equipment) => {
+    setInventory(prev => [...prev, item])
+    addNotification('获得装备', `获得了${item.name}！`)
+  }
+
+  // 出售装备
+  const sellItem = (item: Equipment) => {
+    const sellPrice = Math.floor(item.price * 0.9)
+    setInventory(prev => prev.filter(i => i.id !== item.id))
+    setResources(prev => ({ ...prev, gold: prev.gold + sellPrice }))
+    addNotification('出售', `出售${item.name}，获得${sellPrice}金币`)
+  }
+
+  // 购买装备
+  const buyItem = (item: Equipment) => {
+    if (resources.gold < item.price) {
+      addNotification('提示', '金币不足')
+      return
+    }
+    
+    setResources(prev => ({ ...prev, gold: prev.gold - item.price }))
+    addToInventory(item)
+  }
+
+  // 门派修炼
+  const practiceSkill = (cultivation: SectCultivation) => {
+    // 检查冷却
+    const now = Date.now()
+    const lastPractice = cultivationCooldowns[cultivation.name] || 0
+    if (now - lastPractice < cultivation.cooldown * 1000) {
+      const remainingTime = Math.ceil((cultivation.cooldown * 1000 - (now - lastPractice)) / 1000 / 60)
+      addNotification('提示', `修炼冷却中，还需${remainingTime}分钟`)
+      return
+    }
+    
+    // 检查资源
+    if (resources.gold < cultivation.cost.gold || resources.spiritStone < cultivation.cost.spiritStone) {
+      addNotification('提示', '资源不足')
+      return
+    }
+    
+    // 消耗资源
+    setResources(prev => ({
+      ...prev,
+      gold: prev.gold - cultivation.cost.gold,
+      spiritStone: prev.spiritStone - cultivation.cost.spiritStone
+    }))
+    
+    // 获得奖励
+    setPlayer(prev => {
+      const newAttributes = { ...prev.attributes }
+      if (cultivation.rewards.attributes) {
+        if (cultivation.rewards.attributes.attack) newAttributes.attack += cultivation.rewards.attributes.attack
+        if (cultivation.rewards.attributes.defense) newAttributes.defense += cultivation.rewards.attributes.defense
+        if (cultivation.rewards.attributes.hp) {
+          newAttributes.maxHp += cultivation.rewards.attributes.hp
+          newAttributes.hp += cultivation.rewards.attributes.hp
+        }
+        if (cultivation.rewards.attributes.crit) newAttributes.crit += cultivation.rewards.attributes.crit
+      }
+      
+      return {
+        ...prev,
+        exp: prev.exp + cultivation.rewards.exp,
+        attributes: newAttributes
+      }
+    })
+    
+    // 设置冷却
+    setCultivationCooldowns(prev => ({
+      ...prev,
+      [cultivation.name]: now
+    }))
+    
+    addNotification('修炼成功', `完成${cultivation.name}修炼！`)
+  }
+
+  // 生成随机装备掉落
+  const generateEquipmentDrop = (monsterLevel: number): Equipment | null => {
+    const maxLevel = Math.min(Math.floor(monsterLevel / 5) + 1, 6)
+    const possibleEquipment = EQUIPMENT_SHOP.filter(e => e.level <= maxLevel)
+    if (possibleEquipment.length === 0) return null
+    
+    const randomEquip = possibleEquipment[Math.floor(Math.random() * possibleEquipment.length)]
+    return { ...randomEquip, id: Date.now() + Math.random() } // 生成唯一ID
   }
 
   // ===== 登录界面 (新设计) =====
@@ -901,6 +1392,38 @@ export default function XianXianGame() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setShowShop(true)}
+              variant="outline"
+              size="sm"
+              className="h-10 border-2 border-input hover:border-primary/50 transition-all"
+            >
+              <ShoppingBag className="w-4 h-4 mr-2" />
+              商城
+            </Button>
+
+            <Button
+              onClick={() => setShowInventory(true)}
+              variant="outline"
+              size="sm"
+              className="h-10 border-2 border-input hover:border-primary/50 transition-all"
+            >
+              <Package className="w-4 h-4 mr-2" />
+              背包({inventory.length})
+            </Button>
+            
+            {player.sect && (
+              <Button
+                onClick={() => setShowCultivation(true)}
+                variant="outline"
+                size="sm"
+                className="h-10 border-2 border-input hover:border-primary/50 transition-all"
+              >
+                <Scroll className="w-4 h-4 mr-2" />
+                修炼
+              </Button>
+            )}
+
             <Button
               onClick={() => setAutoPlay(!autoPlay)}
               variant={autoPlay ? 'default' : 'outline'}
@@ -1306,6 +1829,209 @@ export default function XianXianGame() {
                 离开
               </Button>
             </div>
+          </Card>
+        </div>
+      )}
+
+      {/* 商城弹窗 */}
+      {showShop && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-4xl max-h-[80vh] bg-card border border-border/50 shadow-2xl">
+            <div className="p-6 border-b border-border/50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center">
+                  <ShoppingBag className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="font-display text-2xl text-foreground">装备商城</h3>
+              </div>
+              <Button onClick={() => setShowShop(false)} variant="ghost" size="sm">
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            
+            <ScrollArea className="h-[500px] p-6">
+              <Tabs defaultValue="weapon">
+                <TabsList className="grid w-full grid-cols-3 mb-6">
+                  <TabsTrigger value="weapon">武器</TabsTrigger>
+                  <TabsTrigger value="armor">防具</TabsTrigger>
+                  <TabsTrigger value="accessory">饰品</TabsTrigger>
+                </TabsList>
+                
+                {['weapon', 'armor', 'accessory'].map(type => (
+                  <TabsContent key={type} value={type}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {EQUIPMENT_SHOP.filter(e => e.type === type).map(item => (
+                        <Card key={item.id} className="p-4 border border-border/50 hover:border-primary/50 transition-all">
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <div className={`font-semibold ${QUALITY_COLORS[item.quality]} mb-1`}>{item.name}</div>
+                              <div className="text-xs text-muted-foreground">Lv.{item.level}</div>
+                            </div>
+                            <Badge className="bg-primary/10 text-primary border-primary/30">{item.price}金币</Badge>
+                          </div>
+                          
+                          <div className="space-y-1 mb-4 text-sm">
+                            {item.attributes.attack && <div className="text-foreground">攻击: +{item.attributes.attack}</div>}
+                            {item.attributes.defense && <div className="text-foreground">防御: +{item.attributes.defense}</div>}
+                            {item.attributes.hp && <div className="text-foreground">生命: +{item.attributes.hp}</div>}
+                            {item.attributes.crit && <div className="text-foreground">暴击: +{Math.floor(item.attributes.crit * 100)}%</div>}
+                          </div>
+                          
+                          <Button 
+                            onClick={() => buyItem(item)}
+                            className="w-full gradient-primary text-white"
+                            disabled={resources.gold < item.price}
+                          >
+                            <Coins className="w-4 h-4 mr-2" />
+                            购买
+                          </Button>
+                        </Card>
+                      ))}
+                    </div>
+                  </TabsContent>
+                ))}
+              </Tabs>
+            </ScrollArea>
+          </Card>
+        </div>
+      )}
+
+      {/* 背包弹窗 */}
+      {showInventory && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-4xl max-h-[80vh] bg-card border border-border/50 shadow-2xl">
+            <div className="p-6 border-b border-border/50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center">
+                  <Package className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="font-display text-2xl text-foreground">背包</h3>
+              </div>
+              <Button onClick={() => setShowInventory(false)} variant="ghost" size="sm">
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            
+            <ScrollArea className="h-[500px] p-6">
+              {inventory.length === 0 ? (
+                <div className="text-center py-16">
+                  <Package className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground">背包空空如也</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {inventory.map((item, index) => (
+                    <Card key={`${item.id}-${index}`} className="p-4 border border-border/50 hover:border-primary/50 transition-all">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <div className={`font-semibold ${QUALITY_COLORS[item.quality]} mb-1`}>{item.name}</div>
+                          <div className="text-xs text-muted-foreground">Lv.{item.level} · {item.type === 'weapon' ? '武器' : item.type === 'armor' ? '防具' : '饰品'}</div>
+                        </div>
+                        <Badge className="bg-muted/50 text-foreground border-border/50">{Math.floor(item.price * 0.9)}金币</Badge>
+                      </div>
+                      
+                      <div className="space-y-1 mb-4 text-sm">
+                        {item.attributes.attack && <div className="text-foreground">攻击: +{item.attributes.attack}</div>}
+                        {item.attributes.defense && <div className="text-foreground">防御: +{item.attributes.defense}</div>}
+                        {item.attributes.hp && <div className="text-foreground">生命: +{item.attributes.hp}</div>}
+                        {item.attributes.crit && <div className="text-foreground">暴击: +{Math.floor(item.attributes.crit * 100)}%</div>}
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Button 
+                          onClick={() => equipItem(item)}
+                          className="flex-1 gradient-primary text-white"
+                        >
+                          装备
+                        </Button>
+                        <Button 
+                          onClick={() => sellItem(item)}
+                          variant="outline"
+                          className="flex-1"
+                        >
+                          出售
+                        </Button>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </Card>
+        </div>
+      )}
+
+      {/* 门派修炼弹窗 */}
+      {showCultivation && player.sect && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-3xl max-h-[80vh] bg-card border border-border/50 shadow-2xl">
+            <div className="p-6 border-b border-border/50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center">
+                  <Scroll className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="font-display text-2xl text-foreground">{player.sect}修炼</h3>
+              </div>
+              <Button onClick={() => setShowCultivation(false)} variant="ghost" size="sm">
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            
+            <ScrollArea className="h-[500px] p-6">
+              {SECT_CULTIVATIONS.filter(c => c.sect === player.sect).length === 0 ? (
+                <div className="text-center py-16">
+                  <Scroll className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground">暂无可用功法</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {SECT_CULTIVATIONS.filter(c => c.sect === player.sect).map(cultivation => {
+                    const now = Date.now()
+                    const lastPractice = cultivationCooldowns[cultivation.name] || 0
+                    const remainingTime = Math.max(0, cultivation.cooldown * 1000 - (now - lastPractice))
+                    const isOnCooldown = remainingTime > 0
+                    
+                    return (
+                      <Card key={cultivation.name} className="p-5 border border-border/50">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h4 className="font-semibold text-foreground text-lg mb-1">{cultivation.name}</h4>
+                            <p className="text-sm text-muted-foreground mb-3">{cultivation.description}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex gap-4 mb-4 text-sm">
+                          <div className="flex items-center gap-1">
+                            <Coins className="w-4 h-4 text-primary" />
+                            <span className="text-foreground">{cultivation.cost.gold}金币</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Gem className="w-4 h-4 text-primary" />
+                            <span className="text-foreground">{cultivation.cost.spiritStone}灵石</span>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-muted/30 rounded-lg p-3 mb-4 text-sm space-y-1">
+                          <div className="text-foreground">经验: +{cultivation.rewards.exp}</div>
+                          {cultivation.rewards.attributes?.attack && <div className="text-foreground">攻击: +{cultivation.rewards.attributes.attack}</div>}
+                          {cultivation.rewards.attributes?.defense && <div className="text-foreground">防御: +{cultivation.rewards.attributes.defense}</div>}
+                          {cultivation.rewards.attributes?.hp && <div className="text-foreground">生命: +{cultivation.rewards.attributes.hp}</div>}
+                          {cultivation.rewards.attributes?.crit && <div className="text-foreground">暴击: +{Math.floor(cultivation.rewards.attributes.crit * 100)}%</div>}
+                        </div>
+                        
+                        <Button 
+                          onClick={() => practiceSkill(cultivation)}
+                          className="w-full gradient-primary text-white"
+                          disabled={isOnCooldown || resources.gold < cultivation.cost.gold || resources.spiritStone < cultivation.cost.spiritStone}
+                        >
+                          {isOnCooldown ? `冷却中 (${Math.ceil(remainingTime / 1000 / 60)}分钟)` : '开始修炼'}
+                        </Button>
+                      </Card>
+                    )
+                  })}
+                </div>
+              )}
+            </ScrollArea>
           </Card>
         </div>
       )}
